@@ -12,6 +12,7 @@ excludedClassesCoverage += [
   "datadog.trace.api.StatsDClient",
   "datadog.trace.api.NoOpStatsDClient",
   "datadog.trace.api.gateway.Events.ET",
+  "datadog.trace.bootstrap.config.provider.ConfigProvider.Singleton",
   "datadog.trace.bootstrap.instrumentation.api.Tags",
   "datadog.trace.bootstrap.instrumentation.api.CommonTagValues",
   "datadog.trace.bootstrap.instrumentation.api.AgentTracer.NoopAgentPropagation",
