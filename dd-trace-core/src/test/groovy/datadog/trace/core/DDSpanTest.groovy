@@ -343,4 +343,37 @@ class DDSpanTest extends DDCoreSpecification {
     !span.isError()
     span.getTag(DDTags.ERROR_STACK) == null
   }
+
+  def "register span to CWS"() {
+    setup:
+    DDSpanContext context =
+      new DDSpanContext(
+      DDId.from(123),
+      DDId.from(456),
+      DDId.from(789),
+      null,
+      "fakeService",
+      "fakeOperation",
+      "fakeResource",
+      PrioritySampling.UNSET,
+      null,
+      Collections.<String, String> emptyMap(),
+      false,
+      "fakeType",
+      0,
+      tracer.pendingTraceFactory.create(DDId.ONE),
+      null)
+
+    when:
+    DDSpan span = DDSpan.create(1, context)
+    then:
+    context.getCwsTls().getTraceId() == DDId.from(123)
+    context.getCwsTls().getSpanId() == DDId.from(456)
+
+    when:
+    span.finish()
+    then:
+    context.getCwsTls().getTraceId() == DDId.from(123)
+    context.getCwsTls().getSpanId() == DDId.from(789)
+  }
 }

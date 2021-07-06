@@ -1,0 +1,10 @@
+apply from: "$rootDir/gradle/java.gradle"
+
+dependencies {
+  compile group: 'net.java.dev.jna', name: 'jna', version: '5.8.0'
+  compile group: 'net.java.dev.jna', name: 'jna-platform', version: '5.8.0'
+
+  compile project(':dd-trace-api')
+
+  testImplementation project(":dd-java-agent:testing")
+}
