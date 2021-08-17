@@ -5,6 +5,7 @@ import datadog.trace.api.DDId
 
 class Event {
   private final int flags
+  private final Thread thread
   private final long threadId
   private final String threadName
   private final DDId traceId
@@ -15,6 +16,7 @@ class Event {
     this.flags = flags
     this.traceId = traceId
     this.spanId = spanId
+    this.thread = thread
     this.threadId = thread.id
     this.threadName = thread.name
 
@@ -65,6 +67,10 @@ class Event {
 
   DDId getSpanId() {
     return spanId
+  }
+
+  Thread getThread() {
+    return thread
   }
 
   long getThreadId() {
