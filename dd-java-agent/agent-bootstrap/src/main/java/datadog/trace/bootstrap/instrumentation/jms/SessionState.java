@@ -3,11 +3,10 @@ package datadog.trace.bootstrap.instrumentation.jms;
 import static java.util.Collections.newSetFromMap;
 
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
-import java.util.Queue;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
@@ -16,10 +15,8 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
  */
 public final class SessionState {
 
-  private static final AtomicReferenceFieldUpdater<SessionState, Queue> CAPTURED_SPANS =
-      AtomicReferenceFieldUpdater.newUpdater(SessionState.class, Queue.class, "capturedSpans");
-  private static final AtomicIntegerFieldUpdater<SessionState> SPAN_COUNT =
-      AtomicIntegerFieldUpdater.newUpdater(SessionState.class, "spanCount");
+  private static final AtomicReferenceFieldUpdater<SessionState, Deque> CAPTURED_SPANS =
+      AtomicReferenceFieldUpdater.newUpdater(SessionState.class, Deque.class, "capturedSpans");
 
   // hard bound at 8192 captured spans, degrade to finishing spans early
   // if transactions are very large, rather than use lots of space
@@ -30,8 +27,8 @@ public final class SessionState {
   // consumer-related session state
   private final Set<MessageConsumerState> consumerStates =
       newSetFromMap(new ConcurrentHashMap<MessageConsumerState, Boolean>());
-  private volatile Queue<AgentSpan> capturedSpans;
-  private volatile int spanCount;
+  private volatile Deque<AgentSpan> capturedSpans;
+  private volatile boolean finishingLastToFirst = false;
 
   public SessionState(int ackMode) {
     this.ackMode = ackMode;
@@ -55,9 +52,13 @@ public final class SessionState {
 
   // only used for testing
   int getCapturedSpanCount() {
-    Queue<AgentSpan> q = capturedSpans;
-    assert spanCount == (null != q ? q.size() : 0);
-    return spanCount;
+    Deque<AgentSpan> q = capturedSpans;
+    if (null == q) {
+      return 0;
+    }
+    synchronized (q) {
+      return q.size();
+    }
   }
 
   /** Finishes the given message span when a message from the same session is acknowledged. */
@@ -71,19 +72,25 @@ public final class SessionState {
   }
 
   private void captureMessageSpan(AgentSpan span) {
-    Queue<AgentSpan> q = capturedSpans;
+    Deque<AgentSpan> q = capturedSpans;
     if (null == q) {
-      q = new ArrayBlockingQueue<AgentSpan>(MAX_CAPTURED_SPANS);
+      q = new ArrayDeque<>(MAX_CAPTURED_SPANS);
       if (!CAPTURED_SPANS.compareAndSet(this, null, q)) {
         q = capturedSpans; // another thread won, use their value
       }
     }
-    if (q.offer(span)) {
-      SPAN_COUNT.incrementAndGet(this);
-    } else {
-      // just finish the span to avoid an unbounded queue
-      span.finish();
+    synchronized (q) {
+      if (q.size() < MAX_CAPTURED_SPANS) {
+        if (finishingLastToFirst) {
+          q.addFirst(span);
+        } else {
+          q.addLast(span);
+        }
+        return;
+      }
     }
+    // just finish the span to avoid an unbounded queue
+    span.finish();
   }
 
   public void onAcknowledge() {
@@ -95,20 +102,31 @@ public final class SessionState {
   }
 
   private void finishCapturedSpans() {
-    Queue<AgentSpan> q = capturedSpans;
+    Deque<AgentSpan> q = capturedSpans;
     if (null != q) {
+      // synchronized in case incoming requests happen quicker than we can close the spans
       synchronized (this) {
-        // synchronized in case incoming requests
-        // happen quicker than we can close the spans
-        int taken = SPAN_COUNT.get(this);
+        // finish in opposite direction to capture, changing direction on each commit/ack
+        // ie. if we were capturing with 'addLast' then we'll be finishing with 'pollLast'
+        finishingLastToFirst = !finishingLastToFirst;
+        int taken;
+        synchronized (q) {
+          taken = q.size();
+        }
         for (int i = 0; i < taken; ++i) {
-          AgentSpan span = q.poll();
+          AgentSpan span;
+          synchronized (q) {
+            if (finishingLastToFirst) {
+              span = q.pollLast();
+            } else {
+              span = q.pollFirst();
+            }
+          }
           // it won't be null, but just in case...
           if (null != span) {
             span.finish();
           }
         }
-        SPAN_COUNT.getAndAdd(this, -taken);
       }
     }
   }
