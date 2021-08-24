@@ -7,16 +7,12 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
  * Holds message spans consumed in client-acknowledged or transacted sessions. This class needs to
  * be thread-safe as some JMS providers allow concurrent transactions.
  */
 public final class SessionState {
-
-  private static final AtomicReferenceFieldUpdater<SessionState, Deque> CAPTURED_SPANS =
-      AtomicReferenceFieldUpdater.newUpdater(SessionState.class, Deque.class, "capturedSpans");
 
   // hard bound at 8192 captured spans, degrade to finishing spans early
   // if transactions are very large, rather than use lots of space
@@ -27,12 +23,11 @@ public final class SessionState {
   // consumer-related session state
   private final Set<MessageConsumerState> consumerStates =
       newSetFromMap(new ConcurrentHashMap<MessageConsumerState, Boolean>());
-  private volatile Deque<AgentSpan> capturedSpans;
+  private final Deque<AgentSpan> capturedSpans = new ArrayDeque<>();
   private volatile boolean finishingLastToFirst = false;
 
   public SessionState(int ackMode) {
     this.ackMode = ackMode;
-    // defer creating queue as we only need it for consumer client-ack/transacted sessions
   }
 
   public boolean isTransactedSession() {
@@ -52,12 +47,8 @@ public final class SessionState {
 
   // only used for testing
   int getCapturedSpanCount() {
-    Deque<AgentSpan> q = capturedSpans;
-    if (null == q) {
-      return 0;
-    }
-    synchronized (q) {
-      return q.size();
+    synchronized (capturedSpans) {
+      return capturedSpans.size();
     }
   }
 
@@ -72,19 +63,12 @@ public final class SessionState {
   }
 
   private void captureMessageSpan(AgentSpan span) {
-    Deque<AgentSpan> q = capturedSpans;
-    if (null == q) {
-      q = new ArrayDeque<>(MAX_CAPTURED_SPANS);
-      if (!CAPTURED_SPANS.compareAndSet(this, null, q)) {
-        q = capturedSpans; // another thread won, use their value
-      }
-    }
-    synchronized (q) {
-      if (q.size() < MAX_CAPTURED_SPANS) {
+    synchronized (capturedSpans) {
+      if (capturedSpans.size() < MAX_CAPTURED_SPANS) {
         if (finishingLastToFirst) {
-          q.addFirst(span);
+          capturedSpans.addFirst(span);
         } else {
-          q.addLast(span);
+          capturedSpans.addLast(span);
         }
         return;
       }
@@ -102,30 +86,27 @@ public final class SessionState {
   }
 
   private void finishCapturedSpans() {
-    Deque<AgentSpan> q = capturedSpans;
-    if (null != q) {
-      // synchronized in case incoming requests happen quicker than we can close the spans
-      synchronized (this) {
-        // finish in opposite direction to capture, changing direction on each commit/ack
-        // ie. if we were capturing with 'addLast' then we'll be finishing with 'pollLast'
-        finishingLastToFirst = !finishingLastToFirst;
-        int taken;
-        synchronized (q) {
-          taken = q.size();
+    // synchronized in case incoming requests happen quicker than we can close the spans
+    synchronized (this) {
+      // finish in opposite direction to capture, changing direction on each commit/ack
+      // ie. if we were capturing with 'addLast' then we'll be finishing with 'pollLast'
+      finishingLastToFirst = !finishingLastToFirst;
+      int taken;
+      synchronized (capturedSpans) {
+        taken = capturedSpans.size();
+      }
+      for (int i = 0; i < taken; ++i) {
+        AgentSpan span;
+        synchronized (capturedSpans) {
+          if (finishingLastToFirst) {
+            span = capturedSpans.pollLast();
+          } else {
+            span = capturedSpans.pollFirst();
+          }
         }
-        for (int i = 0; i < taken; ++i) {
-          AgentSpan span;
-          synchronized (q) {
-            if (finishingLastToFirst) {
-              span = q.pollLast();
-            } else {
-              span = q.pollFirst();
-            }
-          }
-          // it won't be null, but just in case...
-          if (null != span) {
-            span.finish();
-          }
+        // it won't be null, but just in case...
+        if (null != span) {
+          span.finish();
         }
       }
     }
