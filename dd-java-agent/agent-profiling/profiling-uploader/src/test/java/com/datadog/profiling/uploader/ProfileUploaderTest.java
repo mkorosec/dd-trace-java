@@ -143,6 +143,7 @@ public class ProfileUploaderTest {
     when(config.getApiKey()).thenReturn(null);
     when(config.getMergedProfilingTags()).thenReturn(TAGS);
     when(config.getProfilingUploadTimeout()).thenReturn((int) REQUEST_TIMEOUT.getSeconds());
+    when(config.getProfilingUploadPeriod()).thenReturn(1);
 
     uploader =
         new ProfileUploader(
@@ -420,6 +421,8 @@ public class ProfileUploaderTest {
 
   @Test
   public void test500Response() throws Exception {
+    // return error 500 multiple times for retries
+    server.enqueue(new MockResponse().setResponseCode(500));
     server.enqueue(new MockResponse().setResponseCode(500));
 
     final RecordingData recording = mockRecordingData();

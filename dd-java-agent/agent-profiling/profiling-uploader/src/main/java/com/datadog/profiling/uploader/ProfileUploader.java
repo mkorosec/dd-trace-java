@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -83,6 +84,8 @@ public final class ProfileUploader {
 
   static final int MAX_RUNNING_REQUESTS = 10;
   static final int MAX_ENQUEUED_REQUESTS = 20;
+
+  static final int MAX_RETRIES = 3;
 
   static final String PROFILE_FORMAT = "jfr";
   static final String PROFILE_TYPE_PREFIX = "jfr-";
@@ -162,6 +165,7 @@ public final class ProfileUploader {
   private final int terminationTimeout;
   private final List<String> tags;
   private final CompressionType compressionType;
+  private final int uploadRetryPeriod;
 
   public ProfileUploader(final Config config) throws IOException {
     this(config, new IOLogger(log), ContainerInfo.get().getContainerId(), TERMINATION_TIMEOUT);
@@ -269,6 +273,8 @@ public final class ProfileUploader {
     client.dispatcher().setMaxRequestsPerHost(MAX_RUNNING_REQUESTS);
 
     compressionType = CompressionType.of(config.getProfilingUploadCompression());
+
+    uploadRetryPeriod = config.getProfilingUploadPeriod() / MAX_RETRIES;
   }
 
   /**
@@ -372,6 +378,9 @@ public final class ProfileUploader {
         .newCall(requestBuilder.build())
         .enqueue(
             new Callback() {
+
+              private int retries = 0;
+
               @Override
               public void onFailure(Call call, IOException e) {
                 logDebug("Failed to upload profile");
@@ -381,6 +390,23 @@ public final class ProfileUploader {
 
               @Override
               public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful() && (500 <= response.code() && response.code() < 600)) {
+                  if (retries++ < MAX_RETRIES) {
+                    int backoff = uploadRetryPeriod > 0 ? ThreadLocalRandom.current().nextInt(uploadRetryPeriod) : 0;
+                    logError(String.format(
+                        "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
+                        response.code(), backoff, retries, MAX_RETRIES));
+                    try {
+                      Thread.sleep(backoff * 1000 /* seconds to milliseconds */);
+                    } catch (InterruptedException e) {
+                      // ignore
+                    }
+                    client
+                      .newCall(requestBuilder.build())
+                      .enqueue(this);
+                    return;
+                  }
+                }
                 logDebug("Uploaded profile");
                 responseCallback.onResponse(call, response);
                 onCompletion.run();
@@ -389,6 +415,18 @@ public final class ProfileUploader {
               private void logDebug(String msg) {
                 if (log.isDebugEnabled()) {
                   log.debug(
+                      "{} {} [{}] (Size={}/{} bytes)",
+                      msg,
+                      data.getName(),
+                      type,
+                      body.getReadBytes(),
+                      body.getWrittenBytes());
+                }
+              }
+
+              private void logError(String msg) {
+                if (log.isErrorEnabled()) {
+                  log.error(
                       "{} {} [{}] (Size={}/{} bytes)",
                       msg,
                       data.getName(),
