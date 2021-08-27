@@ -393,7 +393,9 @@ public final class ProfileUploader {
                 if (!response.isSuccessful() && (500 <= response.code() && response.code() < 600)) {
                   if (retries++ < MAX_RETRIES) {
                     try {
-                      int backoff = uploadRetryPeriod > 0 ? ThreadLocalRandom.current().nextInt(uploadRetryPeriod) : 0;
+                      // Make sure we don't overload backend with a thundering herd of agents trying to upload profiles.
+                      int backoff = ThreadLocalRandom.current().nextInt(
+                          uploadRetryPeriod > 0 ? uploadRetryPeriod : (60 / MAX_RETRIES));
                       logDebug(String.format(
                           "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
                           response.code(), backoff, retries, MAX_RETRIES));
