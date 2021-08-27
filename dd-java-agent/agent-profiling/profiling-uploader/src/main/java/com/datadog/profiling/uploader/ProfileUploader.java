@@ -393,18 +393,20 @@ public final class ProfileUploader {
                 if (!response.isSuccessful() && (500 <= response.code() && response.code() < 600)) {
                   if (retries++ < MAX_RETRIES) {
                     try {
-                      // Make sure we don't overload backend with a thundering herd of agents trying to upload profiles.
-                      int backoff = ThreadLocalRandom.current().nextInt(
-                          uploadRetryPeriod > 0 ? uploadRetryPeriod : (60 / MAX_RETRIES));
-                      logDebug(String.format(
-                          "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
-                          response.code(), backoff, retries, MAX_RETRIES));
+                      // Make sure we don't overload backend with a thundering herd of agents trying
+                      // to upload profiles.
+                      int backoff =
+                          ThreadLocalRandom.current()
+                              .nextInt(
+                                  uploadRetryPeriod > 0 ? uploadRetryPeriod : (60 / MAX_RETRIES));
+                      logDebug(
+                          String.format(
+                              "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
+                              response.code(), backoff, retries, MAX_RETRIES));
 
                       Thread.sleep(backoff * 1000 /* seconds to milliseconds */);
 
-                      client
-                        .newCall(requestBuilder.build())
-                        .enqueue(this);
+                      client.newCall(requestBuilder.build()).enqueue(this);
                       return;
                     } catch (InterruptedException e) {
                       // fall-through to no-retries path
