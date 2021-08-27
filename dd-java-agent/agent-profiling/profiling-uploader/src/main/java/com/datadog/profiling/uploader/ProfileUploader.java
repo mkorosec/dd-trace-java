@@ -392,19 +392,21 @@ public final class ProfileUploader {
               public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful() && (500 <= response.code() && response.code() < 600)) {
                   if (retries++ < MAX_RETRIES) {
-                    int backoff = uploadRetryPeriod > 0 ? ThreadLocalRandom.current().nextInt(uploadRetryPeriod) : 0;
-                    logError(String.format(
-                        "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
-                        response.code(), backoff, retries, MAX_RETRIES));
                     try {
+                      int backoff = uploadRetryPeriod > 0 ? ThreadLocalRandom.current().nextInt(uploadRetryPeriod) : 0;
+                      logDebug(String.format(
+                          "Failed to upload profile, received error %d, trying again in %d seconds, retry %d of %d",
+                          response.code(), backoff, retries, MAX_RETRIES));
+
                       Thread.sleep(backoff * 1000 /* seconds to milliseconds */);
+
+                      client
+                        .newCall(requestBuilder.build())
+                        .enqueue(this);
+                      return;
                     } catch (InterruptedException e) {
-                      // ignore
+                      // fall-through to no-retries path
                     }
-                    client
-                      .newCall(requestBuilder.build())
-                      .enqueue(this);
-                    return;
                   }
                 }
                 logDebug("Uploaded profile");
@@ -415,18 +417,6 @@ public final class ProfileUploader {
               private void logDebug(String msg) {
                 if (log.isDebugEnabled()) {
                   log.debug(
-                      "{} {} [{}] (Size={}/{} bytes)",
-                      msg,
-                      data.getName(),
-                      type,
-                      body.getReadBytes(),
-                      body.getWrittenBytes());
-                }
-              }
-
-              private void logError(String msg) {
-                if (log.isErrorEnabled()) {
-                  log.error(
                       "{} {} [{}] (Size={}/{} bytes)",
                       msg,
                       data.getName(),
