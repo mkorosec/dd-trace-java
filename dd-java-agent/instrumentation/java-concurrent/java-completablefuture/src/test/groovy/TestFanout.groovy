@@ -1,6 +1,4 @@
 import datadog.trace.agent.test.AgentTestRunner
-import datadog.trace.agent.test.checkpoints.CheckpointValidator
-import datadog.trace.agent.test.checkpoints.CheckpointValidationMode
 
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
@@ -14,11 +12,6 @@ import static datadog.trace.api.Checkpointer.THREAD_MIGRATION
 class TestFanout extends AgentTestRunner {
 
   def "test propagate with fanout"() {
-    setup:
-    CheckpointValidator.excludeValidations_DONOTUSE_I_REPEAT_DO_NOT_USE(
-      CheckpointValidationMode.SUSPEND_RESUME,
-      CheckpointValidationMode.THREAD_SEQUENCE)
-
     when:
     runUnderTrace("parent") {
       new Fanout(executor, 3, true).execute()
@@ -56,24 +49,19 @@ class TestFanout extends AgentTestRunner {
   }
 
   def "test completablefuture fanout checkpoints"() {
-    setup:
-    CheckpointValidator.excludeValidations_DONOTUSE_I_REPEAT_DO_NOT_USE(
-      CheckpointValidationMode.SUSPEND_RESUME,
-      CheckpointValidationMode.THREAD_SEQUENCE)
-
     when:
     runUnderTrace("parent") {
       new Fanout(executor, 3, traceChildTasks).execute()
     }
     then:
     TEST_WRITER.waitForTraces(1)
-    (traceChildTasks ? 4 : 1) * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
+    (traceChildTasks ? 4 : 1) * TEST_CHECKPOINTER.checkpoint(_, SPAN)
     // the precise number of migrations depends on the threadpool,
     // but the sequence is validated automatically on TEST_CHECKPOINTER
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, CPU | END)
-    (traceChildTasks ? 4 : 1) * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, CPU | END)
+    (traceChildTasks ? 4 : 1) * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
 
     cleanup:
     executor.shutdownNow()
@@ -89,24 +77,19 @@ class TestFanout extends AgentTestRunner {
   }
 
   def "test completablefuture two level fanout checkpoints"() {
-    setup:
-    CheckpointValidator.excludeValidations_DONOTUSE_I_REPEAT_DO_NOT_USE(
-      CheckpointValidationMode.SUSPEND_RESUME,
-      CheckpointValidationMode.THREAD_SEQUENCE)
-
     when:
     runUnderTrace("parent") {
       new Fanout(executor, 3, traceChildTasks).executeTwoLevels()
     }
     then:
     TEST_WRITER.waitForTraces(1)
-    (traceChildTasks ? 7 : 1) * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
+    (traceChildTasks ? 7 : 1) * TEST_CHECKPOINTER.checkpoint(_, SPAN)
     // the precise number of migrations depends on the threadpool,
     // but the sequence is validated automatically on TEST_CHECKPOINTER
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, CPU | END)
-    (traceChildTasks ? 7 : 1) * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, CPU | END)
+    (traceChildTasks ? 7 : 1) * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
 
     cleanup:
     executor.shutdownNow()

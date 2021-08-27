@@ -1,7 +1,7 @@
 import com.google.common.util.concurrent.MoreExecutors
 import datadog.trace.agent.test.AgentTestRunner
-import datadog.trace.agent.test.checkpoints.CheckpointValidator
 import datadog.trace.agent.test.checkpoints.CheckpointValidationMode
+import datadog.trace.agent.test.checkpoints.CheckpointValidator
 import datadog.trace.api.DDId
 import datadog.trace.api.DDSpanTypes
 import datadog.trace.bootstrap.instrumentation.api.AgentPropagation
@@ -62,7 +62,7 @@ class GrpcTest extends AgentTestRunner {
         }
       }
     def builder = InProcessServerBuilder.forName(getClass().name).addService(greeter).executor(executor)
-    (0..extraBuildCalls).each {builder.build()}
+    (0..extraBuildCalls).each { builder.build() }
     Server server = builder.build().start()
 
     ManagedChannel channel = InProcessChannelBuilder.forName(getClass().name).build()
@@ -143,12 +143,12 @@ class GrpcTest extends AgentTestRunner {
         }
       }
     }
-    5 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
-    5 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, CPU | END)
-    _ * TEST_CHECKPOINTER.onRootSpanPublished(_, _)
+    5 * TEST_CHECKPOINTER.checkpoint(_, SPAN)
+    5 * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, CPU | END)
+    _ * TEST_CHECKPOINTER.onRootSpan(_, _)
     0 * TEST_CHECKPOINTER._
 
     cleanup:
@@ -253,9 +253,9 @@ class GrpcTest extends AgentTestRunner {
       }
     }
 
-    3 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
-    3 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
-    _ * TEST_CHECKPOINTER.onRootSpanPublished(_, _)
+    3 * TEST_CHECKPOINTER.checkpoint(_, SPAN)
+    3 * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
+    _ * TEST_CHECKPOINTER.onRootSpan(_, _)
     0 * TEST_CHECKPOINTER._
 
     cleanup:
@@ -276,7 +276,6 @@ class GrpcTest extends AgentTestRunner {
     setup:
     CheckpointValidator.excludeValidations_DONOTUSE_I_REPEAT_DO_NOT_USE(
       CheckpointValidationMode.INTERVALS,
-      CheckpointValidationMode.SUSPEND_RESUME,
       CheckpointValidationMode.THREAD_SEQUENCE)
 
     def error = status.asRuntimeException()
@@ -351,9 +350,9 @@ class GrpcTest extends AgentTestRunner {
       }
     }
 
-    3 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
-    3 * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
-    _ * TEST_CHECKPOINTER.onRootSpanPublished(_, _)
+    3 * TEST_CHECKPOINTER.checkpoint(_, SPAN)
+    3 * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
+    _ * TEST_CHECKPOINTER.onRootSpan(_, _)
     0 * TEST_CHECKPOINTER._
 
     cleanup:

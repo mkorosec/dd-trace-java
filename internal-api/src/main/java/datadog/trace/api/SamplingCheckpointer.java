@@ -12,6 +12,13 @@ import org.slf4j.LoggerFactory;
 
 public final class SamplingCheckpointer implements SpanCheckpointer {
 
+  /**
+   * Creates a new, pre-configured instance bound to {@linkplain NoOpCheckpointer#NO_OP}.<br>
+   * A different {@linkplain Checkpointer} implementation can be set via {@linkplain
+   * SamplingCheckpointer#register(Checkpointer)}.
+   *
+   * @return a new, pre-configured instance
+   */
   public static SamplingCheckpointer create() {
     return new SamplingCheckpointer(NoOpCheckpointer.NO_OP);
   }
@@ -24,61 +31,63 @@ public final class SamplingCheckpointer implements SpanCheckpointer {
 
   private volatile Checkpointer checkpointer;
 
-  public SamplingCheckpointer(Checkpointer checkpointer) {
+  public SamplingCheckpointer(final Checkpointer checkpointer) {
     this.checkpointer = checkpointer;
   }
 
-  public void register(Checkpointer checkpointer) {
+  public void register(final Checkpointer checkpointer) {
     if (!CAS.compareAndSet(this, NoOpCheckpointer.NO_OP, checkpointer)) {
       log.debug(
           "failed to register checkpointer {} - {} already registered",
           checkpointer.getClass(),
           this.checkpointer.getClass());
+    } else {
+      log.debug("Registered checkpointer implementation: {}", checkpointer);
     }
   }
 
   @Override
-  public void checkpoint(AgentSpan span, int flags) {
+  public void checkpoint(final AgentSpan span, final int flags) {
     if (!span.eligibleForDropping()) {
-      checkpointer.checkpoint(span.getTraceId(), span.getSpanId(), flags);
+      checkpointer.checkpoint(span, flags);
     }
   }
 
   @Override
-  public void onStart(AgentSpan span) {
+  public void onStart(final AgentSpan span) {
     checkpoint(span, SPAN);
   }
 
   @Override
-  public void onStartWork(AgentSpan span) {
+  public void onStartWork(final AgentSpan span) {
     checkpoint(span, CPU);
   }
 
   @Override
-  public void onFinishWork(AgentSpan span) {
+  public void onFinishWork(final AgentSpan span) {
     checkpoint(span, CPU | END);
   }
 
   @Override
-  public void onStartThreadMigration(AgentSpan span) {
+  public void onStartThreadMigration(final AgentSpan span) {
     checkpoint(span, THREAD_MIGRATION);
   }
 
   @Override
-  public void onFinishThreadMigration(AgentSpan span) {
+  public void onFinishThreadMigration(final AgentSpan span) {
     checkpoint(span, THREAD_MIGRATION | END);
   }
 
   @Override
-  public void onFinish(AgentSpan span) {
+  public void onFinish(final AgentSpan span) {
     checkpoint(span, SPAN | END);
   }
 
   @Override
-  public void onRootSpanPublished(AgentSpan root) {
-    if (!root.eligibleForDropping()) {
-      checkpointer.onRootSpanPublished(root.getResourceName().toString(), root.getTraceId());
-    }
+  public void onRootSpan(final AgentSpan rootSpan, final boolean published) {
+    final Boolean emittingCheckpoints = rootSpan.isEmittingCheckpoints();
+    checkpointer.onRootSpan(
+        rootSpan, published && emittingCheckpoints != null && emittingCheckpoints);
   }
 
   private static final class NoOpCheckpointer implements Checkpointer {
@@ -86,9 +95,9 @@ public final class SamplingCheckpointer implements SpanCheckpointer {
     static final NoOpCheckpointer NO_OP = new NoOpCheckpointer();
 
     @Override
-    public void checkpoint(DDId traceId, DDId spanId, int flags) {}
+    public void checkpoint(final AgentSpan span, final int flags) {}
 
     @Override
-    public void onRootSpanPublished(String route, DDId traceId) {}
+    public void onRootSpan(final AgentSpan rootSpan, final boolean published) {}
   }
 }

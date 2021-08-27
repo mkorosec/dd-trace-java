@@ -1,7 +1,7 @@
 import datadog.trace.agent.test.base.HttpServer
 import datadog.trace.agent.test.base.HttpServerTest
-import datadog.trace.agent.test.checkpoints.CheckpointValidator
 import datadog.trace.agent.test.checkpoints.CheckpointValidationMode
+import datadog.trace.agent.test.checkpoints.CheckpointValidator
 import datadog.trace.agent.test.utils.ThreadUtils
 import datadog.trace.instrumentation.akkahttp.AkkaHttpServerDecorator
 import okhttp3.Request
@@ -82,12 +82,12 @@ abstract class AkkaHttpServerInstrumentationTest extends HttpServerTest<AkkaHttp
     })
     TEST_WRITER.waitForTraces(totalInvocations)
     then:
-    totalInvocations * TEST_CHECKPOINTER.checkpoint(_, _, SPAN)
-    totalInvocations * TEST_CHECKPOINTER.checkpoint(_, _, SPAN | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, THREAD_MIGRATION | END)
-    _ * TEST_CHECKPOINTER.checkpoint(_, _, CPU | END)
-    _ * TEST_CHECKPOINTER.onRootSpanPublished(_, _)
+    totalInvocations * TEST_CHECKPOINTER.checkpoint(_, SPAN)
+    totalInvocations * TEST_CHECKPOINTER.checkpoint(_, SPAN | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION)
+    _ * TEST_CHECKPOINTER.checkpoint(_, THREAD_MIGRATION | END)
+    _ * TEST_CHECKPOINTER.checkpoint(_, CPU | END)
+    _ * TEST_CHECKPOINTER.onRootSpan(_, _)
     0 * TEST_CHECKPOINTER._
   }
 }
