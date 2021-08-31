@@ -24,6 +24,8 @@ public class LettuceMonoCreationAdvice {
     final boolean finishSpanOnClose = !expectsResponse(command);
     final LettuceMonoDualConsumer mdc = new LettuceMonoDualConsumer(command, finishSpanOnClose);
     publisher = publisher.doOnSubscribe(mdc);
+    // register the 'work' callback such that a proper 'resume span' checkpoint can be emitted
+    publisher = publisher.doOnNext(mdc);
     // register the call back to close the span only if necessary
     if (!finishSpanOnClose) {
       publisher = publisher.doOnSuccessOrError(mdc);

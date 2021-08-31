@@ -30,22 +30,41 @@ public class LettuceMonoDualConsumer<R, T, U extends Throwable>
 
   @Override
   public void accept(final R r) {
-    TraceScope parentScope = null;
-    try {
-      if (parentSpan != null) {
-        parentScope = activateSpan(parentSpan);
+    if (span == null) {
+      // 'onSubscribe'
+      TraceScope parentScope = null;
+      try {
+        if (parentSpan != null) {
+          parentScope = activateSpan(parentSpan);
+        }
+        span = startSpan(REDIS_QUERY);
+        DECORATE.afterStart(span);
+        DECORATE.onCommand(span, command);
+        if (finishSpanOnClose) {
+          DECORATE.beforeFinish(span);
+          span.finish();
+        } else {
+          /*
+          The subscription does not really involve any 'work' - suspend the span so it can be
+          correctly picked up by the subscriber later on.
+           */
+          span.startThreadMigration();
+        }
+      } finally {
+        if (parentScope != null) {
+          parentScope.close();
+        }
       }
-      span = startSpan(REDIS_QUERY);
-      DECORATE.afterStart(span);
-      DECORATE.onCommand(span, command);
-      if (finishSpanOnClose) {
-        DECORATE.beforeFinish(span);
-        span.finish();
-      }
-    } finally {
-      if (parentScope != null) {
-        parentScope.close();
-      }
+    } else {
+      // 'onNext'
+      /*
+      The work is delivered to the subscriber here - need to resume the span to properly attribute it.
+      This is a Mono consumer - meaning that there will be exactly one work item delivered or
+      there would be an error signalled. Therefore, we don't need to be 'suspending' the span
+      after the work item has been processed - instead the LettuceFluxTerminationRunnable will take
+      care of finishing the span.
+      */
+      span.finishThreadMigration();
     }
   }
 
@@ -54,6 +73,7 @@ public class LettuceMonoDualConsumer<R, T, U extends Throwable>
     if (span != null) {
       DECORATE.onError(span, throwable);
       DECORATE.beforeFinish(span);
+      span.finishThreadMigration();
       span.finish();
     } else {
       LoggerFactory.getLogger(Mono.class)

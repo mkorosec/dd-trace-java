@@ -47,10 +47,17 @@ public class LettuceFluxTerminationRunnable implements Consumer<Signal>, Runnabl
 
   @Override
   public void accept(final Signal signal) {
-    if (SignalType.ON_COMPLETE.equals(signal.getType())
-        || SignalType.ON_ERROR.equals(signal.getType())) {
+    SignalType signalType = signal.getType();
+    if (signalType == SignalType.ON_ERROR || signalType == SignalType.ON_NEXT) {
+      /*
+      This signal involves processing a work unit - let's resume the span and
+      attribute the work to that span.
+      */
+      span.finishThreadMigration();
+    }
+    if (signalType == SignalType.ON_COMPLETE || signalType == SignalType.ON_ERROR) {
       finishSpan(false, signal.getThrowable());
-    } else if (SignalType.ON_NEXT.equals(signal.getType())) {
+    } else if (signalType == SignalType.ON_NEXT) {
       ++numResults;
     }
   }
@@ -91,6 +98,12 @@ public class LettuceFluxTerminationRunnable implements Consumer<Signal>, Runnabl
       if (finishSpanOnClose) {
         DECORATE.beforeFinish(span);
         span.finish();
+      } else {
+        /*
+        The subscription does not really involve any 'work' - suspend the span so it can be
+        correctly picked up by the subscriber later on.
+         */
+        span.startThreadMigration();
       }
     }
   }
