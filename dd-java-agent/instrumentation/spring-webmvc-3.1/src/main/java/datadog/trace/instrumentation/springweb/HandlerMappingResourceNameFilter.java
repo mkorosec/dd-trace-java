@@ -34,19 +34,28 @@ public class HandlerMappingResourceNameFilter extends OncePerRequestFilter imple
 
     final Object parentSpan = request.getAttribute(DD_SPAN_ATTRIBUTE);
 
-    if (parentSpan instanceof AgentSpan && !handlerMappings.isEmpty()) {
-      try {
-        if (findMapping(request)) {
-          // Name the parent span based on the matching pattern
-          // Let the parent span resource name be set with the attribute set in findMapping.
-          DECORATE.onRequest((AgentSpan) parentSpan, request, request, null);
+    try {
+      filterChain.doFilter(request, response);
+    } finally {
+      // We run this after the filter chain because there is no guarantee that
+      // HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE is the only thing changed within the request
+      // when doing the handler methods. We still restore it's state after so that anything ahead of
+      // us on the filter chain doesn't get broken.
+      if (parentSpan instanceof AgentSpan) {
+        Object match = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        try {
+          if (findMapping(request)) {
+            // Name the parent span based on the matching pattern
+            // Let the parent span resource name be set with the attribute set in findMapping.
+            DECORATE.onRequest((AgentSpan) parentSpan, request, request, null);
+          }
+        } catch (final Exception ignored) {
+          // mapping.getHandler() threw exception.  Ignore
+        } finally {
+          request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, match);
         }
-      } catch (final Exception ignored) {
-        // mapping.getHandler() threw exception.  Ignore
       }
     }
-
-    filterChain.doFilter(request, response);
   }
 
   /**
