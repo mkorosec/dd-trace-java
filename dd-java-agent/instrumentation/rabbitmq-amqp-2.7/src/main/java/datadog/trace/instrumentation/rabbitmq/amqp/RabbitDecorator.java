@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 public class RabbitDecorator extends ClientDecorator {
 
   public static final CharSequence AMQP_COMMAND = UTF8BytesString.create("amqp.command");
+  public static final CharSequence AMQP_DELIVER = UTF8BytesString.create("amqp.deliver");
   public static final CharSequence RABBITMQ_AMQP = UTF8BytesString.create("rabbitmq-amqp");
 
   private static final String LOCAL_SERVICE_NAME =
@@ -41,6 +42,8 @@ public class RabbitDecorator extends ClientDecorator {
   public static final RabbitDecorator CONSUMER_DECORATE =
       new RabbitDecorator(
           Tags.SPAN_KIND_CONSUMER, InternalSpanTypes.MESSAGE_CONSUMER, LOCAL_SERVICE_NAME);
+  public static final RabbitDecorator BROKER_DECORATE =
+      new RabbitDecorator(Tags.SPAN_KIND_BROKER, InternalSpanTypes.MESSAGE_BROKER, "rabbitmq");
 
   private final String spanKind;
   private final CharSequence spanType;
@@ -114,7 +117,6 @@ public class RabbitDecorator extends ClientDecorator {
 
   public void onCommand(final AgentSpan span, final Command command) {
     final String name = command.getMethod().protocolMethodName();
-
     // Don't overwrite the name already set by onPublish
     if (!name.equals("basic.publish")) {
       span.setResourceName(name);
@@ -122,12 +124,30 @@ public class RabbitDecorator extends ClientDecorator {
     span.setTag(AMQP_COMMAND.toString(), name);
   }
 
+  public void onTimeInQueue(final AgentSpan span, final String queue, final byte[] body) {
+    String queueName = queue;
+    if (queue == null || queue.isEmpty()) {
+      queueName = "<default>";
+    } else if (queue.startsWith("amq.gen-")) {
+      queueName = "<generated>";
+    }
+    span.setResourceName("amqp.deliver " + queueName);
+    if (null != body) {
+      span.setTag("message.size", body.length);
+    }
+    span.setTag(AMQP_QUEUE, queue);
+  }
+
   public TracedDelegatingConsumer wrapConsumer(String queue, Consumer consumer) {
     return new TracedDelegatingConsumer(queue, consumer);
   }
 
   public static AgentSpan startReceivingSpan(
-      boolean propagate, long spanStartMillis, AMQP.BasicProperties properties, byte[] body) {
+      boolean propagate,
+      long spanStartMillis,
+      AMQP.BasicProperties properties,
+      byte[] body,
+      String queue) {
     final Map<String, Object> headers = null != properties ? properties.getHeaders() : null;
     AgentSpan.Context parentContext =
         (null == headers || !propagate)
@@ -139,18 +159,33 @@ public class RabbitDecorator extends ClientDecorator {
     if (spanStartMillis == 0) {
       spanStartMillis = System.currentTimeMillis();
     }
-    if (null == parentContext) {
+    long queueStartMillis = 0;
+    if (null != parentContext) {
+      if (!Config.get().isRabbitLegacyTracingEnabled()) {
+        queueStartMillis = extractTimeInQueueStart(headers);
+      }
+    } else {
       final AgentSpan parent = activeSpan();
       if (null != parent) {
         parentContext = parent.context();
       }
     }
+    long spanStartMicros = TimeUnit.MILLISECONDS.toMicros(spanStartMillis);
+    if (queueStartMillis != 0) {
+      queueStartMillis = Math.min(spanStartMillis, queueStartMillis);
+      AgentSpan queueSpan =
+          startSpan(AMQP_DELIVER, parentContext, TimeUnit.MILLISECONDS.toMicros(queueStartMillis));
+      BROKER_DECORATE.afterStart(queueSpan);
+      BROKER_DECORATE.onTimeInQueue(queueSpan, queue, body);
+      parentContext = queueSpan.context();
+      BROKER_DECORATE.beforeFinish(queueSpan);
+      queueSpan.finish(spanStartMicros);
+    }
     final AgentSpan span;
     if (null != parentContext) {
-      span =
-          startSpan(AMQP_COMMAND, parentContext, TimeUnit.MILLISECONDS.toMicros(spanStartMillis));
+      span = startSpan(AMQP_COMMAND, parentContext, spanStartMicros);
     } else {
-      span = startSpan(AMQP_COMMAND, TimeUnit.MILLISECONDS.toMicros(spanStartMillis));
+      span = startSpan(AMQP_COMMAND, spanStartMicros);
     }
     if (null != body) {
       span.setTag("message.size", body.length);
@@ -179,5 +214,17 @@ public class RabbitDecorator extends ClientDecorator {
     } else {
       span.finish();
     }
+  }
+
+  public static final String RABBITMQ_PRODUCED_KEY = "x_datadog_rabbitmq_produced";
+
+  public static void injectTimeInQueueStart(Map<String, Object> headers) {
+    long startMillis = System.currentTimeMillis();
+    headers.put(RABBITMQ_PRODUCED_KEY, startMillis);
+  }
+
+  public static long extractTimeInQueueStart(Map<String, Object> headers) {
+    Long startMillis = null == headers ? null : (Long) headers.get(RABBITMQ_PRODUCED_KEY);
+    return null == startMillis ? 0 : startMillis;
   }
 }

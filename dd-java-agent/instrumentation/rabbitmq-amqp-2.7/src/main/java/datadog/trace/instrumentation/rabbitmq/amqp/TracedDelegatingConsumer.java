@@ -65,7 +65,7 @@ public class TracedDelegatingConsumer implements Consumer {
       throws IOException {
     AgentScope scope = null;
     try {
-      AgentSpan span = RabbitDecorator.startReceivingSpan(propagate, 0, properties, body);
+      AgentSpan span = RabbitDecorator.startReceivingSpan(propagate, 0, properties, body, queue);
       CONSUMER_DECORATE.onDeliver(span, queue, envelope);
       scope = activateSpan(span);
     } catch (final Exception e) {
