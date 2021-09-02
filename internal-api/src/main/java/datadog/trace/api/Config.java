@@ -152,6 +152,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_INJECTION
 import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_MDC_TAGS_INJECTION_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.OSGI_SEARCH_DEPTH;
 import static datadog.trace.api.config.TraceInstrumentationConfig.PLAY_REPORT_HTTP_STATUS;
+import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_LEGACY_TRACING_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGATION_DISABLED_EXCHANGES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGATION_DISABLED_QUEUES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGATION_ENABLED;
@@ -391,6 +392,7 @@ public class Config {
   private final Set<String> jmsPropagationDisabledTopics;
   private final Set<String> jmsPropagationDisabledQueues;
 
+  private final boolean rabbitLegacyTracingEnabled;
   private final boolean rabbitPropagationEnabled;
   private final Set<String> rabbitPropagationDisabledQueues;
   private final Set<String> rabbitPropagationDisabledExchanges;
@@ -818,6 +820,8 @@ public class Config {
 
     jmsPropagationDisabledQueues =
         tryMakeImmutableSet(configProvider.getList(JMS_PROPAGATION_DISABLED_QUEUES));
+
+    rabbitLegacyTracingEnabled = configProvider.getBoolean(RABBIT_LEGACY_TRACING_ENABLED, true);
 
     rabbitPropagationEnabled =
         configProvider.getBoolean(RABBIT_PROPAGATION_ENABLED, DEFAULT_RABBIT_PROPAGATION_ENABLED);
@@ -1266,6 +1270,10 @@ public class Config {
 
   public boolean isKafkaClientBase64DecodingEnabled() {
     return kafkaClientBase64DecodingEnabled;
+  }
+
+  public boolean isRabbitLegacyTracingEnabled() {
+    return rabbitLegacyTracingEnabled;
   }
 
   public boolean isRabbitPropagationEnabled() {
@@ -2017,11 +2025,13 @@ public class Config {
         + jmsPropagationDisabledTopics
         + ", jmsPropagationDisabledQueues="
         + jmsPropagationDisabledQueues
-        + ", RabbitPropagationEnabled="
+        + ", rabbitLegacyTracingEnabled="
+        + rabbitLegacyTracingEnabled
+        + ", rabbitPropagationEnabled="
         + rabbitPropagationEnabled
-        + ", RabbitPropagationDisabledQueues="
+        + ", rabbitPropagationDisabledQueues="
         + rabbitPropagationDisabledQueues
-        + ", RabbitPropagationDisabledExchanges="
+        + ", rabbitPropagationDisabledExchanges="
         + rabbitPropagationDisabledExchanges
         + ", hystrixTagsEnabled="
         + hystrixTagsEnabled
