@@ -150,6 +150,11 @@ public class GatewayBridge {
         });
   }
 
+  public void stop() {
+    // TODO: resetting IG not possible
+    this.reportService.close();
+  }
+
   private static class RequestContextSupplier implements Flow<RequestContext> {
     private final AppSecRequestContext appSecRequestContext = new AppSecRequestContext();
 
