@@ -2,6 +2,16 @@ package datadog.trace.api.http;
 
 final class SimplePathNormalizer extends PathNormalizer {
 
+  private final int skipFirstXSegments;
+
+  public SimplePathNormalizer(int skipFirstXSegments) {
+    this.skipFirstXSegments = skipFirstXSegments;
+  }
+
+  public SimplePathNormalizer() {
+    this(0);
+  }
+
   @Override
   public String normalize(String path, boolean encoded) {
     if (null == path || path.isEmpty()) {
@@ -9,13 +19,17 @@ final class SimplePathNormalizer extends PathNormalizer {
     }
     StringBuilder sb = new StringBuilder();
     int inEncoding = 0;
+    int segmentsToSkip = skipFirstXSegments;
     for (int i = 0; i < path.length(); ) {
       int nextSlash = path.indexOf('/', i);
       if (nextSlash != i) {
         int endOfSegment = nextSlash == -1 ? path.length() : nextSlash;
         // detect version identifiers
         int segmentLength = (endOfSegment - i);
-        if ((segmentLength <= 3 && segmentLength > 1 && (path.charAt(i) | ' ') == 'v')) {
+        if (segmentsToSkip-- > 0) {
+          // skip this segment
+          sb.append('?');
+        } else if ((segmentLength <= 3 && segmentLength > 1 && (path.charAt(i) | ' ') == 'v')) {
           boolean numeric = true;
           for (int j = i + 1; j < endOfSegment; ++j) {
             numeric &= Character.isDigit(path.charAt(j));

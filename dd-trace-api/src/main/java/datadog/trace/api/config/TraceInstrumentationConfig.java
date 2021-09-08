@@ -23,6 +23,8 @@ public final class TraceInstrumentationConfig {
   public static final String HTTP_SERVER_RAW_QUERY_STRING = "http.server.raw.query-string";
   public static final String HTTP_SERVER_RAW_RESOURCE = "http.server.raw.resource";
   public static final String HTTP_SERVER_ROUTE_BASED_NAMING = "http.server.route-based-naming";
+  public static final String HTTP_SERVER_RESOURCE_PATH_NORMALIZER_SKIP_SEGMENTS =
+      "http.server.normalizer-skip-first-segments";
   public static final String HTTP_CLIENT_TAG_QUERY_STRING = "http.client.tag.query-string";
   public static final String HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN = "trace.http.client.split-by-domain";
   public static final String DB_CLIENT_HOST_SPLIT_BY_INSTANCE = "trace.db.client.split-by-instance";

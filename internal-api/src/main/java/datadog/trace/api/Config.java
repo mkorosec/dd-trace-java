@@ -12,6 +12,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_CLIENT_ERROR_STATUSE
 import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_CLIENT_SPLIT_BY_DOMAIN;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_CLIENT_TAG_QUERY_STRING;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_SERVER_ERROR_STATUSES;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_SERVER_RESOURCE_PATH_NORMALIZER_SKIP_SEGMENTS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_SERVER_ROUTE_BASED_NAMING;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_HTTP_SERVER_TAG_QUERY_STRING;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_INTEGRATIONS_ENABLED;
@@ -134,6 +135,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_HO
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_TAG_QUERY_STRING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_RAW_QUERY_STRING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_RAW_RESOURCE;
+import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_RESOURCE_PATH_NORMALIZER_SKIP_SEGMENTS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_ROUTE_BASED_NAMING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_TAG_QUERY_STRING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HYSTRIX_MEASURED_ENABLED;
@@ -302,6 +304,7 @@ public class Config {
   private final boolean httpServerRawQueryString;
   private final boolean httpServerRawResource;
   private final boolean httpServerRouteBasedNaming;
+  private final int httpServerResourcePathNormalizerSkipSegments;
   private final Map<String, String> httpServerPathResourceNameMapping;
   private final boolean httpClientTagQueryString;
   private final boolean httpClientSplitByDomain;
@@ -599,6 +602,11 @@ public class Config {
     httpServerRouteBasedNaming =
         configProvider.getBoolean(
             HTTP_SERVER_ROUTE_BASED_NAMING, DEFAULT_HTTP_SERVER_ROUTE_BASED_NAMING);
+
+    httpServerResourcePathNormalizerSkipSegments =
+        configProvider.getInteger(
+            HTTP_SERVER_RESOURCE_PATH_NORMALIZER_SKIP_SEGMENTS,
+            DEFAULT_HTTP_SERVER_RESOURCE_PATH_NORMALIZER_SKIP_SEGMENTS);
 
     httpClientTagQueryString =
         configProvider.getBoolean(
@@ -980,6 +988,10 @@ public class Config {
 
   public boolean isHttpServerRawResource() {
     return httpServerRawResource;
+  }
+
+  public int getHttpServerResourcePathNormalizerSkipSegments() {
+    return httpServerResourcePathNormalizerSkipSegments;
   }
 
   public boolean isHttpServerRouteBasedNaming() {
@@ -1865,6 +1877,8 @@ public class Config {
         + httpServerRawQueryString
         + ", httpServerRawResource="
         + httpServerRawResource
+        + ", httpServerResourcePathNormalizerSkipSegments="
+        + httpServerResourcePathNormalizerSkipSegments
         + ", httpServerRouteBasedNaming="
         + httpServerRouteBasedNaming
         + ", httpServerPathResourceNameMapping="

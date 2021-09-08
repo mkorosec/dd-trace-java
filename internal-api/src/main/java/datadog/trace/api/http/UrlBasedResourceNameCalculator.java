@@ -15,7 +15,8 @@ public class UrlBasedResourceNameCalculator {
   // Needs to be before static UrlBasedResourceNameCalculator instance because it is used in the
   // constructor
   // For access in decorators that don't use the calculator directly
-  public static final PathNormalizer SIMPLE_PATH_NORMALIZER = new SimplePathNormalizer();
+  public static final PathNormalizer SIMPLE_PATH_NORMALIZER =
+      new SimplePathNormalizer(Config.get().getHttpServerResourcePathNormalizerSkipSegments());
 
   public static final UrlBasedResourceNameCalculator RESOURCE_NAME_CALCULATOR =
       new UrlBasedResourceNameCalculator();
