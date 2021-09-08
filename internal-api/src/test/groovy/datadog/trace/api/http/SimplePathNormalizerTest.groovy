@@ -7,6 +7,9 @@ class SimplePathNormalizerTest extends DDSpecification {
   @Shared
   SimplePathNormalizer simplePathNormalizer = new SimplePathNormalizer()
 
+  @Shared
+  SimplePathNormalizer skipFirstSegmentPathNormalizer = new SimplePathNormalizer(1)
+
   def "pulls path from url #input"() {
     when:
     def path = simplePathNormalizer.normalize(input) as String
@@ -102,5 +105,25 @@ class SimplePathNormalizerTest extends DDSpecification {
     "/V01/v9/abc/%CC-1"                                  | "/V01/v9/abc/?"
     "/A%DD%EE/av-1/b_2/c.3/%FFd4d/v5f/v699/7"            | "/A%DD%EE/?/?/?/?/?/?/?"
     "/user/asd%A0123/repository/01234567-9ABC-DEF0-1234" | "/user/?/repository/?"
+  }
+
+  def "should skip first segment"() {
+    when:
+    def path = skipFirstSegmentPathNormalizer.normalize(input) as String
+    def pathEncoded = skipFirstSegmentPathNormalizer.normalize(input, true) as String
+
+    then:
+    path == expected
+    pathEncoded == expected
+
+    where:
+    input            | expected
+    "/search"        | "/?"
+    "/users/?/:name" | "/?/?/:name"
+    "abc"            | "?"
+    "/user"          | "/?"
+    "/user/"         | "/?/"
+    "/user/1"        | "/?/?"
+    "/user/1/"       | "/?/?/"
   }
 }
